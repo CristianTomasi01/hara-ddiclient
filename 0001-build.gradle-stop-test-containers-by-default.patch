@@ -1,0 +1,69 @@
+From c6cad404df4af23e52f185a71dabeecb9cac4abb Mon Sep 17 00:00:00 2001
+From: Cristian Tomasi <cristian.tomasi@kynetics.com>
+Date: Mon, 26 Jul 2021 16:15:32 +0200
+Subject: [PATCH] build.gradle: stop test containers by default
+
+Stop test containers by default after tests completed (regardless if
+they succeeded or failed). Allow developers to keep the containers alive
+using the keep_test_container_alive var in one of the following ways:
+1. command line, e.g.:
+./gradlew -Pkeep_test_container_alive=true build
+2. using gradle.properties:
+keep_test_container_alive=true
+
+Signed-off-by: Cristian Tomasi <cristian.tomasi@kynetics.com>
+Signed-off-by: Diego Rondini <diego.rondini@kynetics.com>
+Also-by: Diego Rondini <diego.rondini@kynetics.com>
+---
+ build.gradle | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/build.gradle b/build.gradle
+index a115540..c864fdd 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -23,6 +23,7 @@ repositories {
+ final def deps = gradle.settings.app_dependencies
+ final def tdeps = gradle.settings.test_dependencies
+ final def app_version = '1.0.0'
++ext.keep_test_container_alive = project.hasProperty('keep_test_container_alive') ? project.getProperty('keep_test_container_alive').toBoolean() : false
+ 
+ subprojects {
+     apply plugin: 'org.jetbrains.kotlin.jvm'
+@@ -245,6 +246,18 @@ task buildImage(){
+     }
+ }
+ 
++task stopHawkbitServer() {
++    group 'testing'
++    doFirst {
++        if (!keep_test_container_alive) {
++            exec {
++                workingDir 'docker/test/'
++                commandLine 'docker-compose', 'down'
++            }
++        }
++    }
++}
++
+ task restartHawkbitServer() {
+     group 'testing'
+     doLast {/**/
+@@ -281,6 +294,7 @@ task waitingHawkbitServer(){
+ 
+ test.dependsOn waitingHawkbitServer
+ test.dependsOn cleanTest
++test.finalizedBy stopHawkbitServer
+ 
+ dependencies{
+     testImplementation tdeps.testng
+@@ -294,4 +308,4 @@ dependencies{
+     testImplementation project(':core:core-api')
+     testImplementation project(':ddiapi-client')
+     testImplementation project(':ddiapi-client:ddiapi-client-api')
+-}
+\ No newline at end of file
++}
+-- 
+2.31.1
+
